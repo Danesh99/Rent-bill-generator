@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rent Bill Manager</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load html2canvas for image generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Load QRious library for QR Code generation -->
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+    <!-- Use Inter font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f6;
+        }
+        /* Custom styling for the Bill Card template to ensure a clean image capture */
+        #bill-card-template {
+            width: 350px; /* Fixed width for a good image size */
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            /* Ensure the card is centered and visible */
+            margin: 20px auto; 
+        }
+        .dotted-line {
+            border-bottom: 2px dashed #e5e7eb;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+    <div id="app-container" class="max-w-3xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-indigo-700 mb-6 border-b-4 border-indigo-500 pb-2">
+            Rent Bill Generator
+        </h1>
+
+        <div id="auth-status" class="mb-4 text-sm text-gray-600">
+            <div id="loading-spinner" class="flex items-center space-x-2 text-indigo-500">
+                <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="user-id-display">Initializing Firebase and signing in...</span>
+            </div>
+        </div>
+
+        <!-- Main Content: Bill Generator -->
+        <div id="tab-generator" class="bg-white p-6 rounded-xl shadow-lg mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Generate New Bill</h2>
+            <form id="bill-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Tenant Selection Dropdown -->
+                <div>
+                    <label for="tenant-name" class="block text-sm font-medium text-gray-700 mb-1">Rent Person Name</label>
+                    <select id="tenant-name" name="tenant-name" required
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg border-2">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Billing Month -->
+                <div>
+                    <label for="billing-month" class="block text-sm font-medium text-gray-700 mb-1">Billing Month</label>
+                    <select id="billing-month" name="billing-month" required
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg border-2">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Rent Input -->
+                <div>
+                    <label for="rent" class="block text-sm font-medium text-gray-700 mb-1">Monthly Rent (₹)</label>
+                    <input type="number" id="rent" name="rent" placeholder="e.g., 5000" value="5000" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+
+                <!-- Previous Balance Input -->
+                <div>
+                    <label for="balance" class="block text-sm font-medium text-gray-700 mb-1">Previous Balance/Due (₹)</label>
+                    <input type="number" id="balance" name="balance" placeholder="e.g., 500" value="0" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+
+                <!-- Previous Unit Input -->
+                <div>
+                    <label for="units-previous" class="block text-sm font-medium text-gray-700 mb-1">Previous Unit Reading</label>
+                    <input type="number" id="units-previous" name="units-previous" placeholder="e.g., 1000" value="0" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+
+                <!-- Current Unit Input -->
+                <div>
+                    <label for="units-current" class="block text-sm font-medium text-gray-700 mb-1">Current Unit Reading</label>
+                    <input type="number" id="units-current" name="units-current" placeholder="e.g., 1150" value="0" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                
+                <!-- Cost Per Unit Input -->
+                <div class="md:col-span-1">
+                    <label for="cost-per-unit" class="block text-sm font-medium text-gray-700 mb-1">Cost Per Unit (₹)</label>
+                    <input type="number" step="0.01" id="cost-per-unit" name="cost-per-unit" placeholder="e.g., 6.00" value="6.00" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                
+                <!-- Metro Water Charge Input -->
+                <div class="md:col-span-1">
+                    <label for="metro-water" class="block text-sm font-medium text-gray-700 mb-1">Metro Water Charge (₹)</label>
+                    <input type="number" id="metro-water" name="metro-water" placeholder="e.g., 300" value="0" min="0" required
+                        class="mt-1 block w-full rounded-lg border-2 border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+
+                <!-- Action Buttons and Result -->
+                <div class="md:col-span-2 flex flex-col space-y-4">
+                    <button type="submit"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        Calculate Total & Generate Bill Card
+                    </button>
+                    
+                    <!-- Bill Output Section (Total Display Only) -->
+                    <div id="bill-output-section" class="hidden bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-lg">
+                        <p class="font-bold text-lg">Bill Generated Successfully!</p>
+                        <p id="total-amount-display" class="text-xl font-extrabold mt-1"></p>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Bill Card Preview Area (Visible after generation) -->
+        <div id="bill-card-preview" class="hidden my-8 p-4 bg-white rounded-xl shadow-lg flex justify-center">
+            <!-- Template will be injected here -->
+            <div id="bill-card-template">
+                <div class="text-center mb-4">
+                    <h3 class="text-2xl font-extrabold text-indigo-700">RENT BILL</h3>
+                    <p id="card-month" class="text-lg font-semibold text-gray-600 mt-1"></p>
+                    <p id="card-date" class="text-xs text-gray-500"></p>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-sm text-gray-500">Tenant:</p>
+                    <p id="card-tenant-name" class="text-xl font-bold text-gray-800"></p>
+                </div>
+                
+                <div class="space-y-2 pb-4 dotted-line">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Monthly Rent:</span>
+                        <span id="card-rent" class="font-medium text-gray-700"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Previous Balance:</span>
+                        <span id="card-balance" class="font-medium text-gray-700"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 font-medium">Metro Water Charge:</span>
+                        <span id="card-water-charge" class="font-medium text-gray-700"></span>
+                    </div>
+                    <div class="pt-2">
+                        <p class="text-sm font-medium text-gray-600 mb-1">Electricity Breakdown:</p>
+                        <div class="flex justify-between pl-4 text-sm">
+                            <span id="card-units-detail" class="text-gray-500 italic"></span>
+                            <span id="card-electricity-charge" class="font-medium text-gray-700"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-between items-center pb-4 dotted-line">
+                    <span class="text-2xl font-extrabold text-indigo-700">TOTAL DUE</span>
+                    <span id="card-total-amount" class="text-3xl font-extrabold text-green-600"></span>
+                </div>
+
+                <!-- UPI QR Code Section (DYNAMICALLY GENERATED) -->
+                <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm font-bold text-gray-800 mb-2 flex items-center justify-center">
+                        <span class="text-green-600 font-extrabold text-lg mr-2">UPI</span> Payment
+                    </p>
+                    <div class="flex justify-center items-center space-x-4">
+                        <!-- Canvas element where the QR code will be drawn -->
+                        <canvas id="card-qr-code-canvas" style="width: 100px; height: 100px;" 
+                             class="border border-gray-300 rounded-lg p-1"></canvas>
+                        
+                        <div class="text-left text-xs">
+                            <p class="font-medium text-gray-600">Scan to Pay Exact Amount</p>
+                            <p class="text-indigo-600 font-bold mt-1" id="card-upi-id-display">UPI ID: 7092123876@yescred</p>
+                            <p class="text-gray-500 mt-2 italic">Powered by UPI</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- End UPI QR Code Section -->
+            </div>
+        </div>
+        
+        <!-- NEW: Download and Share Button BELOW the Bill Card -->
+        <div id="share-button-container" class="hidden max-w-[350px] mx-auto mb-8">
+            <button id="download-and-share"
+                class="w-full justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out">
+                Share Bill Card (Image + Text)
+            </button>
+        </div>
+        
+        <!-- Simple message box for feedback -->
+        <div id="feedback-message" class="fixed bottom-4 right-4 p-3 rounded-lg shadow-xl text-white bg-red-600 hidden transition-opacity duration-300"></div>
+
+
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, collection, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase instances
+        let app = null;
+        let db = null;
+        let auth = null;
+        let userId = null;
+        let firestoreCollectionPath = null;
+        let isFirebaseReady = false; // Flag to track if Firebase is initialized and authenticated
+        
+        // Configuration and App ID
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-rent-app-id';
+        // Check for configuration. If not present (local run), use an empty object.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // Check if config is empty (indicating a local/unconfigured run)
+        const isLocalRun = Object.keys(firebaseConfig).length === 0;
+
+        // UPI Constant
+        const UPI_VPA = "7092123876@yescred";
+
+        // UI Elements
+        const form = document.getElementById('bill-form');
+        const tenantSelect = document.getElementById('tenant-name');
+        const monthSelect = document.getElementById('billing-month');
+        const rentInput = document.getElementById('rent');
+        const balanceInput = document.getElementById('balance');
+        const unitsPreviousInput = document.getElementById('units-previous');
+        const unitsCurrentInput = document.getElementById('units-current');
+        const costPerUnitInput = document.getElementById('cost-per-unit');
+        const metroWaterInput = document.getElementById('metro-water');
+        const billOutputSection = document.getElementById('bill-output-section');
+        const totalAmountDisplay = document.getElementById('total-amount-display');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const billCardPreview = document.getElementById('bill-card-preview');
+        
+        // New Share/Download Button
+        const shareButtonContainer = document.getElementById('share-button-container');
+        const downloadAndShareButton = document.getElementById('download-and-share');
+        downloadAndShareButton.textContent = "Share Bill Card (Image + Text)"; // Update button text
+
+        // Card Template Elements
+        const billCardTemplate = document.getElementById('bill-card-template');
+        const cardMonth = document.getElementById('card-month');
+        const cardDate = document.getElementById('card-date');
+        const cardTenantName = document.getElementById('card-tenant-name');
+        const cardRent = document.getElementById('card-rent');
+        const cardBalance = document.getElementById('card-balance');
+        const cardWaterCharge = document.getElementById('card-water-charge');
+        const cardUnitsDetail = document.getElementById('card-units-detail');
+        const cardElectricityCharge = document.getElementById('card-electricity-charge');
+        const cardTotalAmount = document.getElementById('card-total-amount');
+        const cardQrCanvas = document.getElementById('card-qr-code-canvas');
+
+
+        // --- Static Data ---
+        const TENANTS = [
+            "Pradeep", 
+            "Vijayakumar", 
+            "Enoke", 
+            "Gunesekaran", 
+            "Harish Dad", 
+            "Aisha Begum"
+        ];
+        const MONTHS = [
+            "January", "February", "March", "April", "May", "June", 
+            "July", "August", "September", "October", "November", "December"
+        ];
+
+        // Populate dropdowns on load
+        TENANTS.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            tenantSelect.appendChild(option);
+        });
+        
+        MONTHS.forEach((name, index) => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            // Select the current month by default
+            if (index === new Date().getMonth()) {
+                option.selected = true;
+            }
+            monthSelect.appendChild(option);
+        });
+
+        // --- Utility Functions ---
+        const formatCurrency = (amount) => {
+            return `₹${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+        };
+        
+        // This function is now responsible for ALL calculations
+        const calculateTotal = () => {
+            const rent = parseFloat(rentInput.value || 0);
+            const balance = parseFloat(balanceInput.value || 0);
+            const unitsPrev = parseFloat(unitsPreviousInput.value || 0);
+            const unitsCurr = parseFloat(unitsCurrentInput.value || 0);
+            const costPerUnit = parseFloat(costPerUnitInput.value || 0);
+            const metroWaterCharge = parseFloat(metroWaterInput.value || 0);
+
+            // Calculate electricity charges
+            const unitsConsumed = Math.max(0, unitsCurr - unitsPrev);
+            const electricityCharge = unitsConsumed * costPerUnit;
+            
+            // Calculate total amount due
+            const totalAmount = rent + balance + electricityCharge + metroWaterCharge;
+
+            return { unitsConsumed, electricityCharge, metroWaterCharge, totalAmount, rent, balance };
+        };
+        
+        const showFeedback = (message, isError = false) => {
+            feedbackMessage.textContent = message;
+            feedbackMessage.className = `fixed bottom-4 right-4 p-3 rounded-lg shadow-xl text-white ${isError ? 'bg-red-600' : 'bg-green-600'} transition-opacity duration-300`;
+            feedbackMessage.classList.remove('hidden');
+            
+            setTimeout(() => {
+                feedbackMessage.classList.add('hidden');
+            }, 3000);
+        };
+
+        const generateQrCode = (vpa, amount, month) => {
+            const payeeName = "Rent+Manager"; 
+            const transactionNote = `Rent+Bill+for+${month.replace(/\s/g, '+')}`;
+            
+            // Construct the UPI Intent URL
+            const upiUrl = `upi://pay?pa=${vpa}&pn=${payeeName}&am=${amount.toFixed(2)}&cu=INR&tn=${transactionNote}`;
+
+            // Check if QRious is available
+            if (typeof QRious === 'undefined') {
+                console.error("QRious library not loaded. Cannot generate QR code.");
+                return;
+            }
+
+            // Generate the QR code on the canvas
+            new QRious({
+                element: cardQrCanvas,
+                value: upiUrl,
+                size: 100,
+                padding: 5
+            });
+        };
+
+
+        // --- Firebase Initialization and Auth ---
+
+        const initializeFirebase = async () => {
+            try {
+                // --- LOCAL MODE CHECK ---
+                if (isLocalRun) {
+                    console.warn("Running locally: Bypassing Firebase auth and using mock user ID.");
+                    userId = 'LOCAL_USER_' + Math.random().toString(16).slice(2, 8).toUpperCase();
+                    isFirebaseReady = true;
+                    
+                    loadingSpinner.classList.add('hidden');
+                    userIdDisplay.classList.remove('text-indigo-500');
+                    userIdDisplay.classList.add('text-green-600', 'font-bold');
+                    userIdDisplay.textContent = `User ID: ${userId} (Ready - LOCAL MODE)`;
+                    
+                    // Firestore is effectively skipped, but set the path for consistency
+                    firestoreCollectionPath = `/artifacts/${appId}/users/${userId}/rent_records`;
+                    
+                    // Attach event listeners for calculation only
+                    rentInput.addEventListener('input', calculateTotal);
+                    balanceInput.addEventListener('input', calculateTotal);
+                    unitsPreviousInput.addEventListener('input', calculateTotal);
+                    unitsCurrentInput.addEventListener('input', calculateTotal);
+                    costPerUnitInput.addEventListener('input', calculateTotal);
+                    metroWaterInput.addEventListener('input', calculateTotal);
+                    calculateTotal(); // Run once on load
+                    return; // EXIT here for local run
+                }
+                // --- END LOCAL MODE CHECK ---
+
+
+                // --- CANVAS MODE (Firebase Initialization) ---
+                setLogLevel('Debug');
+                
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Wait for auth state to be resolved
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userId = auth.currentUser.uid;
+                    } else {
+                        await signInAnonymously(auth);
+                        userId = auth.currentUser.uid;
+                    }
+
+                    // Update UI once authenticated
+                    if (userId) {
+                        isFirebaseReady = true; // Set flag to true
+                        loadingSpinner.classList.add('hidden');
+                        userIdDisplay.classList.remove('text-indigo-500');
+                        userIdDisplay.classList.add('text-green-600');
+                        userIdDisplay.textContent = `User ID: ${userId} (Ready)`;
+                        
+                        // Set the collection path for saving bills
+                        firestoreCollectionPath = `/artifacts/${appId}/users/${userId}/rent_records`;
+                        console.log("Firestore Path:", firestoreCollectionPath);
+                    }
+                });
+
+                // Add real-time calculation listener for all fields that affect the total
+                rentInput.addEventListener('input', calculateTotal);
+                balanceInput.addEventListener('input', calculateTotal);
+                unitsPreviousInput.addEventListener('input', calculateTotal);
+                unitsCurrentInput.addEventListener('input', calculateTotal);
+                costPerUnitInput.addEventListener('input', calculateTotal);
+                metroWaterInput.addEventListener('input', calculateTotal);
+                calculateTotal(); // Run once on load
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                loadingSpinner.classList.add('hidden');
+                userIdDisplay.classList.remove('text-indigo-500');
+                userIdDisplay.classList.add('text-red-600');
+                userIdDisplay.textContent = `Error initializing Firebase. Check console.`;
+                isFirebaseReady = false; // Ensure flag is false on failure
+            }
+        };
+
+        // --- Firestore Operations (Only Save) ---
+
+        const saveRecord = async (record) => {
+            // Skip saving if running locally
+            if (isLocalRun || !db || !firestoreCollectionPath) {
+                console.warn("Skipping Firestore save: App is running in local/unconfigured mode.");
+                showFeedback("Bill calculated and card generated successfully! (Saving skipped in local mode)", false);
+                return;
+            }
+            
+            try {
+                const docRef = await addDoc(collection(db, firestoreCollectionPath), {
+                    ...record,
+                    timestamp: serverTimestamp(),
+                    userId: userId,
+                });
+                console.log("Document written with ID: ", docRef.id);
+                showFeedback("Bill record saved successfully!", false);
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showFeedback(`Error saving bill record: ${e.message || 'Unknown error.'}`, true);
+            }
+        };
+        
+        // Helper function to convert Base64 Data URL to Blob
+        const dataURLtoBlob = (dataurl) => {
+            const arr = dataurl.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while(n--){
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], {type:mime});
+        };
+
+        // --- Event Listener for Form Submission ---
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // CHECK: Prevent submission if Firebase isn't ready
+            if (!isFirebaseReady) {
+                 showFeedback("Initialization not complete. Please wait for the 'Ready' status.", true);
+                 console.error("Form submission blocked: Firebase not ready.");
+                 return;
+            }
+            
+            // 1. Get Values & Calculate Total
+            const tenantName = tenantSelect.value;
+            const billingMonth = monthSelect.value;
+            const unitsPrevious = parseFloat(unitsPreviousInput.value || 0);
+            const unitsCurrent = parseFloat(unitsCurrentInput.value || 0);
+            const costPerUnit = parseFloat(costPerUnitInput.value || 0);
+            
+            const { unitsConsumed, electricityCharge, metroWaterCharge, totalAmount, rent, balance } = calculateTotal();
+
+            // 2. Update UI and Show Card Preview
+            billOutputSection.classList.remove('hidden');
+            billCardPreview.classList.remove('hidden');
+            shareButtonContainer.classList.remove('hidden'); // Show the download/share button
+            totalAmountDisplay.textContent = `TOTAL: ${formatCurrency(totalAmount)}`;
+
+            // 3. Populate Card Template (for image generation)
+            cardMonth.textContent = billingMonth;
+            cardDate.textContent = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            cardTenantName.textContent = tenantName;
+            cardRent.textContent = formatCurrency(rent);
+            cardBalance.textContent = formatCurrency(balance);
+            cardWaterCharge.textContent = formatCurrency(metroWaterCharge);
+            cardUnitsDetail.textContent = `${unitsConsumed.toFixed(0)} units (${unitsCurrent} - ${unitsPrevious})`;
+            cardElectricityCharge.textContent = formatCurrency(electricityCharge);
+            cardTotalAmount.textContent = formatCurrency(totalAmount);
+            
+            // 4. Generate Dynamic QR Code
+            generateQrCode(UPI_VPA, totalAmount, billingMonth);
+
+            // 5. Create Record Object
+            const record = {
+                tenantName,
+                billingMonth,
+                rent: rent,
+                balance: balance,
+                metroWaterCharge: metroWaterCharge,
+                unitsPrevious: unitsPrevious,
+                unitsCurrent: unitsCurrent,
+                unitsConsumed: unitsConsumed,
+                costPerUnit: costPerUnit,
+                electricityCharge: electricityCharge,
+                totalAmount: totalAmount,
+            };
+
+            // 6. Save to Firestore (will be skipped in local mode)
+            await saveRecord(record);
+            
+            // Optional: Scroll to the result
+            billOutputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        // --- Event Listener for Download/Share Button ---
+
+        downloadAndShareButton.addEventListener('click', async () => {
+            // Use the visible bill card template to generate the image
+            const element = document.getElementById('bill-card-template');
+            
+            try {
+                // Generate canvas from the template
+                const canvas = await html2canvas(element, { 
+                    scale: 3, 
+                    useCORS: true, 
+                    logging: false,
+                    allowTaint: true 
+                });
+                
+                const image = canvas.toDataURL('image/png'); // Base64 data
+                
+                // Get sharing text and filename
+                const amountText = cardTotalAmount.textContent.replace('₹', '').replace(/,/g, '');
+                const totalAmount = parseFloat(amountText || 0);
+                const month = monthSelect.value;
+                const tenantName = tenantSelect.value;
+
+                const fileName = `${month.replace(/\s/g, '_')}_Bill_${tenantName.replace(/\s/g, '_')}.png`;
+                const shareText = `*Rent Bill for ${month}*\nTenant: ${tenantName}\nTotal Due: ₹${totalAmount.toFixed(2)}\n\n_Generated using Rent Bill Manager._`;
+
+
+                // ** NEW SHARING LOGIC: Use Web Share API first (for mobile attachment sharing) **
+                
+                const blob = dataURLtoBlob(image);
+                const file = new File([blob], fileName, { type: 'image/png' });
+                
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    // Mobile: Use Web Share API to share the file directly
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Rent Bill',
+                            text: shareText
+                        });
+                        showFeedback("Bill image shared successfully via system share menu!", false);
+
+                    } catch (error) {
+                        if (error.name !== 'AbortError') {
+                            console.error('Error using Web Share API:', error);
+                            showFeedback("Sharing failed (Web Share API error). Falling back to download...", true);
+                            // Fall through to desktop logic
+                        } else {
+                            showFeedback("Sharing cancelled.", false);
+                        }
+                    }
+                } else {
+                    // Desktop/Browser Fallback: Download the file and open WhatsApp text share
+                    
+                    // 1. Trigger Download
+                    const link = document.createElement('a');
+                    link.href = image;
+                    link.download = fileName;
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    // 2. Open WhatsApp link for text
+                    const encodedText = encodeURIComponent(shareText);
+                    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+
+                    showFeedback(`Image downloaded as ${fileName}. Direct file sharing is not supported on this browser. Opening WhatsApp to share the bill text...`, false);
+                    
+                    setTimeout(() => {
+                         window.open(whatsappUrl, '_blank');
+                    }, 1000);
+                }
+
+            } catch (error) {
+                console.error("Error generating image card:", error);
+                showFeedback("Error generating image: Check console for details.", true);
+            }
+        });
+
+
+        // --- Start App ---
+        window.onload = initializeFirebase;
+
+    </script>
+</body>
+</html>
