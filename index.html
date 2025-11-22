@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rent Bill Manager</title>
+    <title>Rent Bill Manager (Local)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load html2canvas for image generation -->
@@ -38,13 +38,13 @@
             Rent Bill Generator
         </h1>
 
+        <!-- Simplified Status for Local Mode -->
         <div id="auth-status" class="mb-4 text-sm text-gray-600">
-            <div id="loading-spinner" class="flex items-center space-x-2 text-indigo-500">
-                <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <div class="flex items-center space-x-2 text-green-600 font-bold">
+                <svg class="h-5 w-5 fill-current" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                 </svg>
-                <span id="user-id-display">Initializing Firebase and signing in...</span>
+                <span>Local Mode (Ready)</span>
             </div>
         </div>
 
@@ -206,29 +206,8 @@
 
     </div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, collection, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global Firebase instances
-        let app = null;
-        let db = null;
-        let auth = null;
-        let userId = null;
-        let firestoreCollectionPath = null;
-        let isFirebaseReady = false; // Flag to track if Firebase is initialized and authenticated
-        
-        // Configuration and App ID
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-rent-app-id';
-        // Check for configuration. If not present (local run), use an empty object.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Check if config is empty (indicating a local/unconfigured run)
-        const isLocalRun = Object.keys(firebaseConfig).length === 0;
-
+    <!-- Application Script -->
+    <script>
         // UPI Constant
         const UPI_VPA = "7092123876@yescred";
 
@@ -244,15 +223,12 @@
         const metroWaterInput = document.getElementById('metro-water');
         const billOutputSection = document.getElementById('bill-output-section');
         const totalAmountDisplay = document.getElementById('total-amount-display');
-        const userIdDisplay = document.getElementById('user-id-display');
-        const loadingSpinner = document.getElementById('loading-spinner');
         const feedbackMessage = document.getElementById('feedback-message');
         const billCardPreview = document.getElementById('bill-card-preview');
         
-        // New Share/Download Button
+        // Share/Download Button
         const shareButtonContainer = document.getElementById('share-button-container');
         const downloadAndShareButton = document.getElementById('download-and-share');
-        downloadAndShareButton.textContent = "Share Bill Card (Image + Text)"; // Update button text
 
         // Card Template Elements
         const billCardTemplate = document.getElementById('bill-card-template');
@@ -282,24 +258,26 @@
             "July", "August", "September", "October", "November", "December"
         ];
 
-        // Populate dropdowns on load
-        TENANTS.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            tenantSelect.appendChild(option);
-        });
-        
-        MONTHS.forEach((name, index) => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            // Select the current month by default
-            if (index === new Date().getMonth()) {
-                option.selected = true;
-            }
-            monthSelect.appendChild(option);
-        });
+        // Function to populate dropdowns on load
+        const setupDropdowns = () => {
+             TENANTS.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                tenantSelect.appendChild(option);
+            });
+            
+            MONTHS.forEach((name, index) => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                // Select the current month by default
+                if (index === new Date().getMonth()) {
+                    option.selected = true;
+                }
+                monthSelect.appendChild(option);
+            });
+        };
 
         // --- Utility Functions ---
         const formatCurrency = (amount) => {
@@ -336,17 +314,17 @@
         };
 
         const generateQrCode = (vpa, amount, month) => {
+            // Check for the QRious library before attempting generation
+            if (typeof QRious === 'undefined') {
+                console.error("QRious library not loaded. Cannot generate QR code.");
+                return;
+            }
+            
             const payeeName = "Rent+Manager"; 
             const transactionNote = `Rent+Bill+for+${month.replace(/\s/g, '+')}`;
             
             // Construct the UPI Intent URL
             const upiUrl = `upi://pay?pa=${vpa}&pn=${payeeName}&am=${amount.toFixed(2)}&cu=INR&tn=${transactionNote}`;
-
-            // Check if QRious is available
-            if (typeof QRious === 'undefined') {
-                console.error("QRious library not loaded. Cannot generate QR code.");
-                return;
-            }
 
             // Generate the QR code on the canvas
             new QRious({
@@ -355,114 +333,6 @@
                 size: 100,
                 padding: 5
             });
-        };
-
-
-        // --- Firebase Initialization and Auth ---
-
-        const initializeFirebase = async () => {
-            try {
-                // --- LOCAL MODE CHECK ---
-                if (isLocalRun) {
-                    console.warn("Running locally: Bypassing Firebase auth and using mock user ID.");
-                    userId = 'LOCAL_USER_' + Math.random().toString(16).slice(2, 8).toUpperCase();
-                    isFirebaseReady = true;
-                    
-                    loadingSpinner.classList.add('hidden');
-                    userIdDisplay.classList.remove('text-indigo-500');
-                    userIdDisplay.classList.add('text-green-600', 'font-bold');
-                    userIdDisplay.textContent = `User ID: ${userId} (Ready - LOCAL MODE)`;
-                    
-                    // Firestore is effectively skipped, but set the path for consistency
-                    firestoreCollectionPath = `/artifacts/${appId}/users/${userId}/rent_records`;
-                    
-                    // Attach event listeners for calculation only
-                    rentInput.addEventListener('input', calculateTotal);
-                    balanceInput.addEventListener('input', calculateTotal);
-                    unitsPreviousInput.addEventListener('input', calculateTotal);
-                    unitsCurrentInput.addEventListener('input', calculateTotal);
-                    costPerUnitInput.addEventListener('input', calculateTotal);
-                    metroWaterInput.addEventListener('input', calculateTotal);
-                    calculateTotal(); // Run once on load
-                    return; // EXIT here for local run
-                }
-                // --- END LOCAL MODE CHECK ---
-
-
-                // --- CANVAS MODE (Firebase Initialization) ---
-                setLogLevel('Debug');
-                
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                // Wait for auth state to be resolved
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                    } else if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        userId = auth.currentUser.uid;
-                    } else {
-                        await signInAnonymously(auth);
-                        userId = auth.currentUser.uid;
-                    }
-
-                    // Update UI once authenticated
-                    if (userId) {
-                        isFirebaseReady = true; // Set flag to true
-                        loadingSpinner.classList.add('hidden');
-                        userIdDisplay.classList.remove('text-indigo-500');
-                        userIdDisplay.classList.add('text-green-600');
-                        userIdDisplay.textContent = `User ID: ${userId} (Ready)`;
-                        
-                        // Set the collection path for saving bills
-                        firestoreCollectionPath = `/artifacts/${appId}/users/${userId}/rent_records`;
-                        console.log("Firestore Path:", firestoreCollectionPath);
-                    }
-                });
-
-                // Add real-time calculation listener for all fields that affect the total
-                rentInput.addEventListener('input', calculateTotal);
-                balanceInput.addEventListener('input', calculateTotal);
-                unitsPreviousInput.addEventListener('input', calculateTotal);
-                unitsCurrentInput.addEventListener('input', calculateTotal);
-                costPerUnitInput.addEventListener('input', calculateTotal);
-                metroWaterInput.addEventListener('input', calculateTotal);
-                calculateTotal(); // Run once on load
-
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                loadingSpinner.classList.add('hidden');
-                userIdDisplay.classList.remove('text-indigo-500');
-                userIdDisplay.classList.add('text-red-600');
-                userIdDisplay.textContent = `Error initializing Firebase. Check console.`;
-                isFirebaseReady = false; // Ensure flag is false on failure
-            }
-        };
-
-        // --- Firestore Operations (Only Save) ---
-
-        const saveRecord = async (record) => {
-            // Skip saving if running locally
-            if (isLocalRun || !db || !firestoreCollectionPath) {
-                console.warn("Skipping Firestore save: App is running in local/unconfigured mode.");
-                showFeedback("Bill calculated and card generated successfully! (Saving skipped in local mode)", false);
-                return;
-            }
-            
-            try {
-                const docRef = await addDoc(collection(db, firestoreCollectionPath), {
-                    ...record,
-                    timestamp: serverTimestamp(),
-                    userId: userId,
-                });
-                console.log("Document written with ID: ", docRef.id);
-                showFeedback("Bill record saved successfully!", false);
-            } catch (e) {
-                console.error("Error adding document: ", e);
-                showFeedback(`Error saving bill record: ${e.message || 'Unknown error.'}`, true);
-            }
         };
         
         // Helper function to convert Base64 Data URL to Blob
@@ -482,13 +352,6 @@
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-
-            // CHECK: Prevent submission if Firebase isn't ready
-            if (!isFirebaseReady) {
-                 showFeedback("Initialization not complete. Please wait for the 'Ready' status.", true);
-                 console.error("Form submission blocked: Firebase not ready.");
-                 return;
-            }
             
             // 1. Get Values & Calculate Total
             const tenantName = tenantSelect.value;
@@ -518,25 +381,10 @@
             
             // 4. Generate Dynamic QR Code
             generateQrCode(UPI_VPA, totalAmount, billingMonth);
-
-            // 5. Create Record Object
-            const record = {
-                tenantName,
-                billingMonth,
-                rent: rent,
-                balance: balance,
-                metroWaterCharge: metroWaterCharge,
-                unitsPrevious: unitsPrevious,
-                unitsCurrent: unitsCurrent,
-                unitsConsumed: unitsConsumed,
-                costPerUnit: costPerUnit,
-                electricityCharge: electricityCharge,
-                totalAmount: totalAmount,
-            };
-
-            // 6. Save to Firestore (will be skipped in local mode)
-            await saveRecord(record);
             
+            // Show confirmation
+            showFeedback("Bill calculated and card generated successfully!", false);
+
             // Optional: Scroll to the result
             billOutputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
@@ -568,13 +416,13 @@
                 const shareText = `*Rent Bill for ${month}*\nTenant: ${tenantName}\nTotal Due: ₹${totalAmount.toFixed(2)}\n\n_Generated using Rent Bill Manager._`;
 
 
-                // ** NEW SHARING LOGIC: Use Web Share API first (for mobile attachment sharing) **
+                // ** SHARING LOGIC: Use Web Share API first (for mobile attachment sharing) **
                 
                 const blob = dataURLtoBlob(image);
                 const file = new File([blob], fileName, { type: 'image/png' });
                 
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    // Mobile: Use Web Share API to share the file directly
+                    // Mobile: Use Web Share API to share the file directly (supports WhatsApp file attachment)
                     try {
                         await navigator.share({
                             files: [file],
@@ -587,7 +435,6 @@
                         if (error.name !== 'AbortError') {
                             console.error('Error using Web Share API:', error);
                             showFeedback("Sharing failed (Web Share API error). Falling back to download...", true);
-                            // Fall through to desktop logic
                         } else {
                             showFeedback("Sharing cancelled.", false);
                         }
@@ -606,7 +453,8 @@
 
                     // 2. Open WhatsApp link for text
                     const encodedText = encodeURIComponent(shareText);
-                    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+                    // Use the dedicated WhatsApp URL for better compatibility
+                    const whatsappUrl = `https://wa.me/?text=${encodedText}`; 
 
                     showFeedback(`Image downloaded as ${fileName}. Direct file sharing is not supported on this browser. Opening WhatsApp to share the bill text...`, false);
                     
@@ -623,7 +471,17 @@
 
 
         // --- Start App ---
-        window.onload = initializeFirebase;
+        window.onload = () => {
+            setupDropdowns();
+            // Attach input listeners for real-time calculation update
+            rentInput.addEventListener('input', calculateTotal);
+            balanceInput.addEventListener('input', calculateTotal);
+            unitsPreviousInput.addEventListener('input', calculateTotal);
+            unitsCurrentInput.addEventListener('input', calculateTotal);
+            costPerUnitInput.addEventListener('input', calculateTotal);
+            metroWaterInput.addEventListener('input', calculateTotal);
+            calculateTotal(); // Run once on load
+        };
 
     </script>
 </body>
